@@ -4,53 +4,104 @@ using UnityEngine;
 
 namespace EventBusSystem
 {
-    public static class EventBus
-    {
-        private static Dictionary<Type, SubscribersList<IGlobalSubscriber>> s_Subscribers
-            = new Dictionary<Type, SubscribersList<IGlobalSubscriber>>();
-        
-        public static void Subscribe(IGlobalSubscriber subscriber)
-        {
-            List<Type> subscriberTypes = EventBusHelper.GetSubscriberTypes(subscriber);
-            foreach (Type t in subscriberTypes)
-            {
-                if (!s_Subscribers.ContainsKey(t))
-                {
-                    s_Subscribers[t] = new SubscribersList<IGlobalSubscriber>();
-                }
-                s_Subscribers[t].Add(subscriber);
+    namespace LeopotamGroup.Events {
+    /// <summary>
+    /// EventBus implementation.
+    /// </summary>
+    public sealed class EventBus {
+        /// <summary>
+        /// Prototype for subscribers action.
+        /// </summary>
+        /// <param name="eventData">Event data.</param>
+        public delegate void EventHandler<T> (T eventData);
+
+        const int MaxCallDepth = 5;
+
+        readonly Dictionary<Type, Delegate> _events = new Dictionary<Type, Delegate> (32);
+
+        int _eventsInCall;
+
+        /// <summary>
+        /// Subscribe callback to be raised on specific event.
+        /// </summary>
+        /// <param name="eventAction">Callback.</param>
+        public void Subscribe<T> (EventHandler<T> eventAction) {
+            if (eventAction != null) {
+                var eventType = typeof (T);
+                Delegate rawList;
+                _events.TryGetValue (eventType, out rawList);
+                _events[eventType] = (rawList as EventHandler<T>) + eventAction;
             }
         }
-        
-        public static void Unsubscribe(IGlobalSubscriber subscriber)
-        {
-            List<Type> subscriberTypes = EventBusHelper.GetSubscriberTypes(subscriber);
-            foreach (Type t in subscriberTypes)
-            {
-                if (s_Subscribers.ContainsKey(t))
-                    s_Subscribers[t].Remove(subscriber);
+
+        /// <summary>
+        /// Unsubscribe callback.
+        /// </summary>
+        /// <param name="eventAction">Event action.</param>
+        /// <param name="keepEvent">GC optimization - clear only callback list and keep event for future use.</param>
+        public void Unsubscribe<T> (EventHandler<T> eventAction, bool keepEvent = false) {
+            if (eventAction != null) {
+                var eventType = typeof (T);
+                Delegate rawList;
+                if (_events.TryGetValue (eventType, out rawList)) {
+                    var list = (rawList as EventHandler<T>) - eventAction;
+                    if (list == null && !keepEvent) {
+                        _events.Remove (eventType);
+                    } else {
+                        _events[eventType] = list;
+                    }
+                }
             }
         }
-        
-        public static void RaiseEvent<TSubscriber>(Action<TSubscriber> action)
-            where TSubscriber : class, IGlobalSubscriber
-        {
-            SubscribersList<IGlobalSubscriber> subscribers = s_Subscribers[typeof(TSubscriber)];
-	
-            subscribers.Executing = true;
-            foreach (IGlobalSubscriber subscriber in subscribers.List)
-            {
-                try
-                {
-                    action.Invoke(subscriber as TSubscriber);
-                }
-                catch (Exception e)
-                {
-                    Debug.LogError(e);
+
+        /// <summary>
+        /// Unsubscribe all callbacks from event.
+        /// </summary>
+        /// <param name="keepEvent">GC optimization - clear only callback list and keep event for future use.</param>
+        public void UnsubscribeAll<T> (bool keepEvent = false) {
+            var eventType = typeof (T);
+            Delegate rawList;
+            if (_events.TryGetValue (eventType, out rawList)) {
+                if (keepEvent) {
+                    _events[eventType] = null;
+                } else {
+                    _events.Remove (eventType);
                 }
             }
-            subscribers.Executing = false;
-            subscribers.Cleanup();
+        }
+
+        /// <summary>
+        /// Unsubscribe all listeneres and clear all events.
+        /// </summary>
+        public void UnsubscribeAndClearAllEvents () {
+            _events.Clear ();
+        }
+
+        /// <summary>
+        /// Publish event.
+        /// </summary>
+        /// <param name="eventMessage">Event message.</param>
+        public void Publish<T> (T eventMessage) {
+            if (_eventsInCall >= MaxCallDepth) {
+#if UNITY_EDITOR
+                Debug.LogError ("Max call depth reached");
+#endif
+                return;
+            }
+            var eventType = typeof (T);
+            Delegate rawList;
+            _events.TryGetValue (eventType, out rawList);
+            var list = rawList as EventHandler<T>;
+            if (list != null) {
+                _eventsInCall++;
+                try {
+                    list (eventMessage);
+                } catch (Exception ex) {
+                    Debug.LogError (ex);
+                }
+                _eventsInCall--;
+            }
         }
     }
+}
 }
