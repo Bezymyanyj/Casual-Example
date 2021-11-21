@@ -31,6 +31,11 @@ namespace UI
         private void OnNegativeAnswer(NegativeAnswer answer)
         {
             life--;
+            hearts[life].enabled = false;
+            if (life < 1)
+            {
+                bus.Publish<EndGameHandler>(new EndGameHandler());
+            }
         }
     }
 }
