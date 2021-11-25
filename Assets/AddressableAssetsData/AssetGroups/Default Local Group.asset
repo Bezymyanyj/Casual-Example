@@ -73,6 +73,10 @@ MonoBehaviour:
     m_Address: Assets/Prfabs/BaseCard.prefab
     m_ReadOnly: 0
     m_SerializedLabels: []
+  - m_GUID: bdd27aa02e0a4b849fc219f8e70eebfb
+    m_Address: Assets/GameSettings.csv
+    m_ReadOnly: 0
+    m_SerializedLabels: []
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 5ec1624f78a566042acf128b2fec9baa, type: 2}
   m_SchemaSet:
